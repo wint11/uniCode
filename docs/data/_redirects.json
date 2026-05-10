@@ -1,0 +1,16 @@
+{
+  "drafts/guides-development-security": "guides/development/security",
+  "drafts/guides-development-code-style": "guides/development/code-style",
+  "drafts/project-management-changelog": "project-management/changelog",
+  "drafts/guides-testing-overview": "guides/testing/overview",
+  "drafts/getting-started-environment": "getting-started/environment",
+  "drafts/architecture-adr-index": "architecture/adr/index",
+  "drafts/getting-started-quickstart": "getting-started/quickstart",
+  "drafts/architecture-data-model-index": "architecture/data-model/index",
+  "drafts/guides-operations-deployment": "guides/operations/deployment",
+  "drafts/architecture-adr-adr-0001-nextjs-app-router": "architecture/adr/adr-0001-nextjs-app-router",
+  "drafts/architecture-adr-adr-0002-typescript": "architecture/adr/adr-0002-typescript",
+  "drafts/apis-index": "apis/index",
+  "drafts/guides-development-commit-convention": "guides/development/commit-convention",
+  "drafts/guides-development-development-standards": "guides/development/development-standards"
+}

@@ -1,0 +1,42 @@
+---
+author: ai-generated
+reviewer: reviewer
+status: published
+last_reviewed: 2026-05-10
+review_date: 2026-05-10
+review_comment: 
+review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"unpublished","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"unpublished","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"rejected","comment":"123"},{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""}]
+---
+# 安全策略
+
+## 核心原则：禁止硬编码
+
+严禁硬编码路径、URL、环境信息、连接字符串或配置值。所有前置条件必须在运行时通过检测、提取和加载机制完成处理。
+
+## 输入验证
+
+- 所有来自客户端的数据（Server Action 入参、API 请求体、URL 查询参数）必须经过强类型校验工具（Zod）进行严格过滤与清洗。
+- 禁止将未经校验的数据直接送入数据库引擎。
+
+## 认证与授权
+
+- 基于动态会话机制：每次会话刷新时从数据库实时读取最新角色与状态。
+- 严禁使用长期有效的静态权限令牌。
+- 服务端接口在执行业务逻辑前必须将权限校验作为第一道防线。
+- 针对复杂业务实体，需支持细粒度权限控制（校验是否为合法所有者或被授权人）。
+- 全局层面实施客户端僵尸会话检测：用户被删除或禁用时，前端残留登录状态被强制且静默地清退。
+
+## 文件上传安全
+
+- 采用流式读取和分块处理，严禁将完整文件一次性加载至内存。
+- 所有文件访问路由内置防目录穿越保护，拦截包含 `..` 的非法请求。
+- 实施严格的目录与类型白名单校验。
+
+## 资源泄漏
+
+- 代码在运行结束前必须清理并回收全部已申请的系统资源（内存、文件句柄、网络连接、锁、临时对象）。
+
+## 日志安全
+
+- 严禁在日志中打印敏感信息（密码、会话凭证、完整支付信息等）。
+- 所有流入日志系统的数据必须经过脱敏清洗。

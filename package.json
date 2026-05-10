@@ -1,0 +1,37 @@
+{
+  "name": "unicode-temp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4728",
+    "build": "next build",
+    "start": "next start -p 4728",
+    "lint": "eslint",
+    "seed": "npx tsx docs/tools/seed.ts",
+    "scan-docs": "npx tsx docs/tools/scan-docs.ts",
+    "publish-docs": "npx tsx docs/tools/publish-docs.ts",
+    "check-code-refs": "npx tsx docs/tools/check-code-refs.ts",
+    "migrate-db": "npx tsx docs/tools/migrate-to-db.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "gray-matter": "^4.0.3",
+    "jose": "^6.2.3",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest *)",
+      "Bash(npm --version)",
+      "Bash(gcc --version)",
+      "Bash(g++ --version)",
+      "Bash(npm install *)",
+      "Bash(node -e \"const Database = require\\('better-sqlite3'\\); const db = new Database\\(':memory:'\\); db.exec\\('CREATE TABLE test \\(id INTEGER PRIMARY KEY\\)'\\); db.prepare\\('INSERT INTO test VALUES \\(?\\)'\\).run\\(1\\); const row = db.prepare\\('SELECT * FROM test'\\).get\\(\\); console.log\\('better-sqlite3 works! Row:', JSON.stringify\\(row\\)\\); db.close\\(\\);\")",
+      "Bash(npm run *)",
+      "Bash(curl *)",
+      "Bash(pwsh -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 4728 -ErrorAction SilentlyContinue\\).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(npx tsx *.)",
+      "Bash(npx tsx *)",
+      "Bash(node -e ' *)",
+      "Bash(netstat -ano)",
+      "Bash(echo '{}')",
+      "Bash(rm -rf \"D:/网站/uniCode/docs/drafts\")",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(rm -rf \"D:/网站/uniCode/.next\")",
+      "Bash(rm -f \"D:/网站/uniCode/docs/data/_redirects.json\")",
+      "Bash(ls docs/data/_redirects.json)",
+      "Bash(rm -rf \"D:/网站/uniCode/.next\" \"D:/网站/uniCode/docs/data/_redirects.json\")",
+      "Bash(ls -la \"D:\\\\\\\\网站\\\\\\\\uniCode\\\\\\\\temp-docs\")"
+    ]
+  }
+}
