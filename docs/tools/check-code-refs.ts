@@ -16,8 +16,8 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, relative, extname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import matter from 'gray-matter';
 import Database from 'better-sqlite3';
+import { parseFootMatter } from './lib/foot-matter';
 
 const DOCS_DIR = join(process.cwd(), 'docs');
 const HASHES_FILE = join(DOCS_DIR, 'data', 'code-hashes.json');
@@ -49,7 +49,11 @@ async function collectDocCodeRefs(): Promise<{ docs: DocInfo[]; map: CodeDocMap 
       slug: string; title: string; content: string;
     }[];
     for (const row of rows) {
-      const refs = extractCodeRefs(row.content);
+      // 优先读取 Foot Matter 中的 code_refs，回退到正文内联提取
+      const fm = parseFootMatter(row.content);
+      const refs = fm && fm.code_refs.length > 0
+        ? fm.code_refs
+        : extractCodeRefs(row.content);
       if (refs.length > 0) {
         docs.push({ slug: row.slug, title: row.title, codeRefs: refs });
         for (const ref of refs) {
@@ -65,15 +69,16 @@ async function collectDocCodeRefs(): Promise<{ docs: DocInfo[]; map: CodeDocMap 
   const draftFiles = await findMdFiles(join(DOCS_DIR, 'drafts'));
   for (const file of draftFiles) {
     const raw = await readFile(file, 'utf-8');
-    const parsed = matter(raw);
     const slug = relative(join(DOCS_DIR, 'drafts'), file).replace(/\\/g, '/').replace(/\.md$/, '');
 
-    // 优先读取 frontmatter 中的 code_refs
-    const fmRefs = (parsed.data as Record<string, unknown>).code_refs;
-    const refs: string[] = Array.isArray(fmRefs) ? fmRefs.map(String) : extractCodeRefs(parsed.content);
+    // 优先读取 Foot Matter 中的 code_refs，回退到正文内联提取
+    const fm = parseFootMatter(raw);
+    const refs = fm && fm.code_refs.length > 0
+      ? fm.code_refs
+      : extractCodeRefs(raw);
 
     if (refs.length > 0) {
-      const titleMatch = parsed.content.match(/^#\s+(.+)$/m);
+      const titleMatch = raw.match(/^#\s+(.+)$/m);
       docs.push({ slug: `drafts/${slug}`, title: titleMatch?.[1] ?? slug, codeRefs: refs });
       for (const ref of refs) {
         if (!map[ref]) map[ref] = [];
@@ -131,22 +136,40 @@ async function computeHashes(codeFiles: string[]): Promise<HashSnapshot> {
   return hashes;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const shouldUpdate = args.includes('--update');
-  const isInit = args.includes('--init');
+export interface CheckRefsResult {
+  /** 关联的文档数量 */
+  docCount: number;
+  /** 关联的代码文件数量 */
+  codeFileCount: number;
+  /** 发生变更的代码文件 */
+  changedFiles: string[];
+  /** 受影响的文档 slug 列表 */
+  affectedDocs: string[];
+  /** 是否存在变更 */
+  hasChanges: boolean;
+}
 
-  console.log('收集代码-文档关联...\n');
+export async function checkCodeRefs(options?: {
+  silent?: boolean;
+  update?: boolean;
+  init?: boolean;
+}): Promise<CheckRefsResult> {
+  const silent = options?.silent ?? false;
+  const shouldUpdate = options?.update ?? false;
+  const isInit = options?.init ?? false;
+
+  if (!silent) console.log('收集代码-文档关联...\n');
 
   const { docs, map } = await collectDocCodeRefs();
   const allCodeFiles = Object.keys(map);
 
-  console.log(`关联统计: ${docs.length} 份文档覆盖 ${allCodeFiles.length} 个代码文件\n`);
+  if (!silent) console.log(`关联统计: ${docs.length} 份文档覆盖 ${allCodeFiles.length} 个代码文件\n`);
 
   if (allCodeFiles.length === 0) {
-    console.log('未发现任何代码-文档关联。请在文档 Front Matter 中添加 code_refs 字段。');
-    console.log('示例: code_refs: [src/lib/docs/actions.ts, tools/scan-docs.ts]');
-    return;
+    if (!silent) {
+      console.log('未发现任何代码-文档关联。请在文档末尾的 Foot Matter 中添加 code_refs 字段。');
+    }
+    return { docCount: docs.length, codeFileCount: 0, changedFiles: [], affectedDocs: [], hasChanges: false };
   }
 
   // 计算当前哈希
@@ -157,7 +180,7 @@ async function main() {
   try {
     previousHashes = JSON.parse(await readFile(HASHES_FILE, 'utf-8'));
   } catch {
-    console.log('(无历史快照，将创建初始快照)\n');
+    if (!silent) console.log('(无历史快照，将创建初始快照)\n');
   }
 
   // 对比
@@ -178,49 +201,58 @@ async function main() {
     }
   }
 
+  const allChanged = [...changedFiles, ...addedFiles, ...removedFiles];
+
+  // 反查文档
+  const affectedDocs = new Set<string>();
+  for (const file of allChanged) {
+    for (const slug of (map[file] || [])) {
+      affectedDocs.add(slug);
+    }
+  }
+
   // 输出报告
-  if (isInit) {
-    console.log('初始快照已创建。');
-  } else if (changedFiles.length === 0 && addedFiles.length === 0 && removedFiles.length === 0) {
-    console.log('未检测到代码变更，所有关联文档均为最新。');
-  } else {
-    console.log('── 代码变更检测 ──\n');
-    for (const file of addedFiles) {
-      console.log(`  [新增] ${file}`);
-    }
-    for (const file of changedFiles) {
-      console.log(`  [变更] ${file}`);
-    }
-    for (const file of removedFiles) {
-      console.log(`  [删除] ${file}`);
-    }
+  if (!silent) {
+    if (isInit) {
+      console.log('初始快照已创建。');
+    } else if (allChanged.length === 0) {
+      console.log('未检测到代码变更，所有关联文档均为最新。');
+    } else {
+      console.log('── 代码变更检测 ──\n');
+      for (const file of addedFiles) console.log(`  [新增] ${file}`);
+      for (const file of changedFiles) console.log(`  [变更] ${file}`);
+      for (const file of removedFiles) console.log(`  [删除] ${file}`);
 
-    // 反查文档
-    const affectedDocs = new Set<string>();
-    for (const file of [...changedFiles, ...addedFiles, ...removedFiles]) {
-      for (const slug of (map[file] || [])) {
-        affectedDocs.add(slug);
+      console.log(`\n── 需检查的文档 (${affectedDocs.size} 份) ──\n`);
+      for (const slug of [...affectedDocs].sort()) {
+        const doc = docs.find((d) => d.slug === slug);
+        console.log(`  /docs/${slug}  —  ${doc?.title ?? slug}`);
       }
-    }
-
-    console.log(`\n── 需检查的文档 (${affectedDocs.size} 份) ──\n`);
-    for (const slug of [...affectedDocs].sort()) {
-      const doc = docs.find((d) => d.slug === slug);
-      const title = doc?.title ?? slug;
-      console.log(`  /docs/${slug}  —  ${title}`);
     }
   }
 
   // 保存快照
   if (shouldUpdate || isInit || Object.keys(previousHashes).length === 0) {
     await writeFile(HASHES_FILE, JSON.stringify(currentHashes, null, 2), 'utf-8');
-    console.log('\n哈希快照已更新。');
-  } else {
+    if (!silent) console.log('\n哈希快照已更新。');
+  } else if (!silent && allChanged.length > 0) {
     console.log('\n提示: 使用 --update 更新哈希快照。');
   }
+
+  return {
+    docCount: docs.length,
+    codeFileCount: allCodeFiles.length,
+    changedFiles: allChanged,
+    affectedDocs: [...affectedDocs],
+    hasChanges: allChanged.length > 0,
+  };
 }
 
-main().catch((err) => {
-  console.error('检测失败:', err);
-  process.exit(1);
-});
+// 仅在直接运行时执行 CLI（被 tool.ts 引入时跳过）
+if (process.argv[1]?.replace(/\\/g, '/').includes('docs/tools/check-code-refs')) {
+  const args = process.argv.slice(2);
+  checkCodeRefs({ update: args.includes('--update'), init: args.includes('--init') }).catch((err) => {
+    console.error('检测失败:', err);
+    process.exit(1);
+  });
+}

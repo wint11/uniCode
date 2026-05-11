@@ -1,11 +1,11 @@
 ---
 author: ai-generated
-reviewer: reviewer
+reviewer: admin
 status: published
-last_reviewed: 2026-05-10
-review_date: 2026-05-10
+last_reviewed: 2026-05-11
+review_date: 2026-05-11
 review_comment: 
-review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""}]
+review_history: [{"date":"2026-05-11","reviewer":"admin","action":"published","comment":""}]
 ---
 # Next.js全栈开发规范
 
@@ -177,3 +177,26 @@ review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published"
 1. 为保证人工智能模型在代码生成与协作过程中能够严格遵循既定的项目机制，必须在项目根目录设立模型专属的系统指令约束文件。
 2. 必须将本开发规范中的核心原则（如禁用硬编码、强制异常捕获、严格的文件命名法、双轨制接口设计等）以指令形式硬性注入约束文件中。
 3. 确保模型在每次生成代码前，都会自动加载并应用这些上下文约束，使得自动生成的代码在架构美学、健壮性和安全性上完全贴合本项目的顶级要求，实现无缝的人机结对编程。
+---
+code_refs:
+  - src/proxy.ts
+  - src/app/layout.tsx
+  - docs/lib/actions.ts
+  - docs/lib/db/schema.ts
+  - docs/lib/db/docs.ts
+  - docs/lib/types.ts
+  - docs/lib/index.ts
+  - docs/tools/scan-docs.ts
+  - docs/tools/check-code-refs.ts
+  - docs/tools/publish-docs.ts
+  - docs/tools/seed.ts
+  - package.json
+  - next.config.ts
+  - tsconfig.json
+
+doc_refs:
+  - getting-started/quickstart
+  - guides/development/code-style
+  - guides/development/security
+  - project-management/changelog
+---

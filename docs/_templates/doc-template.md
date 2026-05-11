@@ -1,6 +1,6 @@
 ---
-author: human | AI-[modelname]
-reviewer: 
+author: human | ai-generated
+reviewer:
 status: draft
 last_reviewed:
 target_path:
@@ -19,6 +19,13 @@ review_history: []
 
 正文内容。
 
-## 相关文档
 
-- [相关文档链接](path)
+
+---
+
+code_refs:
+  - path/to/code-file.ts
+  - path/to/another-file.tsx
+doc_refs:
+  - path/to/doc-slug
+---

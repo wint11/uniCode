@@ -1,11 +1,11 @@
 ---
 author: ai-generated
-reviewer: reviewer
+reviewer: admin
 status: published
-last_reviewed: 2026-05-10
-review_date: 2026-05-10
+last_reviewed: 2026-05-11
+review_date: 2026-05-11
 review_comment: 
-review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"unpublished","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"unpublished","comment":""},{"date":"2026-05-10","reviewer":"reviewer","action":"rejected","comment":"123"},{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""}]
+review_history: [{"date":"2026-05-11","reviewer":"admin","action":"published","comment":""}]
 ---
 # 安全策略
 
@@ -40,3 +40,11 @@ review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published"
 
 - 严禁在日志中打印敏感信息（密码、会话凭证、完整支付信息等）。
 - 所有流入日志系统的数据必须经过脱敏清洗。
+---
+code_refs:
+  - src/proxy.ts
+  - docs/lib/actions.ts
+
+doc_refs:
+  - guides/development/development-standards
+---

@@ -1,11 +1,11 @@
 ---
 author: ai-generated
-reviewer: reviewer
+reviewer: admin
 status: published
-last_reviewed: 2026-05-10
-review_date: 2026-05-10
+last_reviewed: 2026-05-11
+review_date: 2026-05-11
 review_comment: 
-review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""}]
+review_history: [{"date":"2026-05-11","reviewer":"admin","action":"published","comment":""}]
 ---
 # 快速开始
 
@@ -31,26 +31,45 @@ npm run build
 npm run start
 ```
 
-## 项目结构概览
+## 项目结构
 
 ```
 uniCode
 ├── CLAUDE.md              # AI Agent 调度入口
-├── AGENTS.md              # Next.js 官方 Agent 规则
-├── docs/                  # 项目知识库（人类 + AI 共享）
-│   ├── index.md           # 全局导航
-│   ├── _templates/        # 文档模板
-│   ├── architecture/      # 架构设计
-│   ├── guides/            # 开发/测试/运维指南
-│   └── ...
-├── src/
-│   └── app/               # Next.js App Router 页面
-├── public/                # 静态资源
-└── tools/                 # 辅助脚本工具
+├── AGENTS.md              # Next.js Agent 规则
+├── docs/                  # 项目知识库
+│   ├── drafts/            # AI 草稿区
+│   ├── production/        # 发布快照（只读）
+│   ├── tools/             # 辅助脚本
+│   └── lib/               # 业务逻辑
+└── src/                   # Next.js App Router
+    ├── app/               # 页面路由
+    └── proxy.ts           # JWT 认证中间件
 ```
+
+## 常用命令
+
+| 命令 | 作用 |
+|------|------|
+| `npm run dev` | 启动开发服务器 (port 4728) |
+| `npm run build` | 生产构建 |
+| `npm run lint` | ESLint 检查 |
+| `npm run seed -- --reset` | 重置文档系统 |
+| `npm run scan-docs` | 扫描文档合规性 |
+| `npm run check-code-refs` | 检测代码-文档关联变更 |
 
 ## 下一步
 
+- 阅读 [开发规范](./guides-development-development-standards.md)（必读）
 - 阅读 [编码规范](./guides-development-code-style.md)
-- 阅读 [Git 提交规范](./guides-development-commit-convention.md)
 - 阅读 [安全策略](./guides-development-security.md)
+---
+code_refs:
+  - package.json
+  - next.config.ts
+
+doc_refs:
+  - guides/development/development-standards
+  - guides/development/code-style
+  - guides/development/security
+---

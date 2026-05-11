@@ -9,6 +9,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, extname, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import matter from 'gray-matter';
+import { parseFootMatter } from './lib/foot-matter';
+import { getAllDbSlugs } from '../lib/db/docs';
 
 const DOCS_DIR = join(process.cwd(), 'docs');
 const REQUIRED_FIELDS = ['author', 'status', 'review_date', 'review_comment', 'target_path'] as const;
@@ -68,6 +70,25 @@ function collectAllSlugs(files: string[]): Set<string> {
     slugs.add(slug);
   }
   return slugs;
+}
+
+// 构建 target_path → 文件 slug 的映射（用于解析 Foot Matter doc_refs）
+async function buildTargetSlugMap(files: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  for (const file of files) {
+    try {
+      const raw = await readFile(file, 'utf-8');
+      const parsed = matter(raw);
+      const targetPath = (parsed.data as Record<string, unknown>).target_path;
+      if (typeof targetPath === 'string' && targetPath.trim()) {
+        const rel = relative(DOCS_DIR, file).replace(/\\/g, '/');
+        map.set(targetPath.trim(), rel.replace(/\.md$/, ''));
+      }
+    } catch {
+      // 解析失败，跳过
+    }
+  }
+  return map;
 }
 
 // 解析 markdown 链接，返回 [(链接文本, 目标, 在文件中的行号)]
@@ -138,7 +159,7 @@ function checkLink(
   return { type: 'broken', resolvedPath: cleanTarget };
 }
 
-async function scanFile(filePath: string, allSlugs: Set<string>): Promise<ScanIssue[]> {
+async function scanFile(filePath: string, allSlugs: Set<string>, targetSlugMap: Map<string, string>): Promise<ScanIssue[]> {
   const relativePath = relative(process.cwd(), filePath);
   const issues: ScanIssue[] = [];
 
@@ -202,18 +223,58 @@ async function scanFile(filePath: string, allSlugs: Set<string>): Promise<ScanIs
     }
   }
 
+  // Foot Matter 引用完整性检查
+  const footMatter = parseFootMatter(raw);
+  if (footMatter) {
+    // 检查 doc_refs 是否指向有效文档
+    for (const docRef of footMatter.doc_refs) {
+      // 将 target_path 引用解析为实际文件的 slug
+      const resolvedRef = targetSlugMap.get(docRef) || docRef;
+      const result = checkLink(resolvedRef, docRelativePath, allSlugs);
+      if (result.type === 'broken') {
+        issues.push({ file: relativePath, type: 'broken_link', detail: `Foot Matter doc_refs 死链: "${docRef}" → 文档不存在` });
+      } else if (result.type === 'draft_ref') {
+        if (!docRelativePath.replace(/\\/g, '/').startsWith('drafts/')) {
+          issues.push({ file: relativePath, type: 'draft_link', detail: `Foot Matter doc_refs 引用了 drafts 文档: "${docRef}" → 可能已晋升，需更新引用` });
+        }
+      }
+    }
+
+    // 检查 code_refs 是否指向存在的文件
+    for (const codeRef of footMatter.code_refs) {
+      const absPath = join(process.cwd(), codeRef);
+      if (!existsSync(absPath)) {
+        issues.push({ file: relativePath, type: 'broken_link', detail: `Foot Matter code_refs 死链: "${codeRef}" → 文件不存在` });
+      }
+    }
+  }
+
   return issues;
 }
 
-async function main() {
-  console.log('文档扫描中（含引用完整性检查）...\n');
+export async function scanDocs(options?: { silent?: boolean }): Promise<ScanResult> {
+  const silent = options?.silent ?? false;
+  if (!silent) console.log('文档扫描中（含引用完整性检查）...\n');
 
   const files = await findMdFiles(DOCS_DIR);
   const allSlugs = collectAllSlugs(files);
+  const targetSlugMap = await buildTargetSlugMap(files);
+
+  // 合并数据库中的文档 slug（如自动入库的变更日志）
+  try {
+    const dbSlugs = getAllDbSlugs();
+    for (const s of dbSlugs) {
+      allSlugs.add(s);
+      targetSlugMap.set(s, s); // DB 文档的 slug 直接可用
+    }
+  } catch {
+    // 数据库可能未初始化
+  }
+
   const result: ScanResult = { total: files.length, ok: 0, issues: [] };
 
   for (const file of files) {
-    const issues = await scanFile(file, allSlugs);
+    const issues = await scanFile(file, allSlugs, targetSlugMap);
     if (issues.length === 0) {
       result.ok++;
     } else {
@@ -221,30 +282,37 @@ async function main() {
     }
   }
 
-  // 输出报告
-  console.log(`总计: ${result.total}  合规: ${result.ok}  问题: ${result.issues.length}\n`);
+  if (!silent) {
+    console.log(`总计: ${result.total}  合规: ${result.ok}  问题: ${result.issues.length}\n`);
 
-  if (result.issues.length > 0) {
-    console.log('── 问题明细 ──\n');
-    for (const issue of result.issues) {
-      const tag: Record<string, string> = {
-        missing_field: '缺字段',
-        invalid_status: '状态错',
-        stale: '过期',
-        parse_error: '解析错',
-        broken_link: '死链',
-        draft_link: '草稿链',
-      };
-      console.log(`  [${tag[issue.type] ?? issue.type}] ${issue.file}`);
-      console.log(`         ${issue.detail}\n`);
+    if (result.issues.length > 0) {
+      console.log('── 问题明细 ──\n');
+      for (const issue of result.issues) {
+        const tag: Record<string, string> = {
+          missing_field: '缺字段',
+          invalid_status: '状态错',
+          stale: '过期',
+          parse_error: '解析错',
+          broken_link: '死链',
+          draft_link: '草稿链',
+        };
+        console.log(`  [${tag[issue.type] ?? issue.type}] ${issue.file}`);
+        console.log(`         ${issue.detail}\n`);
+      }
+    } else {
+      console.log('全部文档合规。');
     }
-    process.exit(1);
   }
 
-  console.log('全部文档合规。');
+  return result;
 }
 
-main().catch((err) => {
-  console.error('扫描失败:', err);
-  process.exit(1);
-});
+// 仅在直接运行时执行 CLI（被 tool.ts 引入时跳过）
+if (process.argv[1]?.replace(/\\/g, '/').includes('docs/tools/scan-docs')) {
+  scanDocs().then((result) => {
+    if (result.issues.length > 0) process.exit(1);
+  }).catch((err) => {
+    console.error('扫描失败:', err);
+    process.exit(1);
+  });
+}

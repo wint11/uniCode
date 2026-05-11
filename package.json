@@ -7,11 +7,17 @@
     "build": "next build",
     "start": "next start -p 4728",
     "lint": "eslint",
-    "seed": "npx tsx docs/tools/seed.ts",
-    "scan-docs": "npx tsx docs/tools/scan-docs.ts",
-    "publish-docs": "npx tsx docs/tools/publish-docs.ts",
-    "check-code-refs": "npx tsx docs/tools/check-code-refs.ts",
-    "migrate-db": "npx tsx docs/tools/migrate-to-db.ts"
+    "tool": "npx tsx docs/tools/tool.ts",
+    "tool:check": "npx tsx docs/tools/tool.ts --check",
+    "tool:scan": "npx tsx docs/tools/tool.ts --scan",
+    "tool:refs": "npx tsx docs/tools/tool.ts --refs",
+    "tool:publish": "npx tsx docs/tools/tool.ts --publish",
+    "tool:changelog": "npx tsx docs/tools/tool.ts --changelog",
+    "seed": "npx tsx docs/tools/tool.ts --seed",
+    "scan-docs": "npx tsx docs/tools/tool.ts --scan",
+    "publish-docs": "npx tsx docs/tools/tool.ts --publish",
+    "check-code-refs": "npx tsx docs/tools/tool.ts --refs",
+    "migrate-db": "npx tsx docs/tools/tool.ts --migrate"
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",

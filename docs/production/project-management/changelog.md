@@ -1,17 +1,17 @@
 ---
 author: ai-generated
-reviewer: reviewer
+reviewer: system
 status: published
-last_reviewed: 2026-05-10
-review_date: 2026-05-10
+last_reviewed: 2026-05-11
+review_date: 2026-05-11
 review_comment: 
-review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""}]
+review_history: [{"date":"2026-05-11","reviewer":"system","action":"published","comment":"从 git log 自动生成"}]
 ---
 # 变更日志
 
-## [Unreleased]
+## 2026-05-10
+- first commit (`6ee8c5f`)
 
-### Added
-- 初始化 Next.js 16 项目模板
-- 建立统一文档治理体系
-- 制定企业级开发规范
+---
+
+> 本文档由 `npm run tool` 自动生成，内容来源于 `git log`。

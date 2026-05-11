@@ -1,11 +1,11 @@
 ---
 author: ai-generated
-reviewer: reviewer
+reviewer: admin
 status: published
-last_reviewed: 2026-05-10
-review_date: 2026-05-10
+last_reviewed: 2026-05-11
+review_date: 2026-05-11
 review_comment: 
-review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published","comment":""}]
+review_history: [{"date":"2026-05-11","reviewer":"admin","action":"published","comment":""}]
 ---
 # 编码规范
 
@@ -39,3 +39,11 @@ review_history: [{"date":"2026-05-10","reviewer":"reviewer","action":"published"
 ## 零警告原则
 
 在任何环节（代码执行、终端输出、编译、打包、命令运行）均不允许出现任何错误或警告。一旦出现，必须定位根源并修正。严禁采用关闭日志、降低警告等级、绕过检查等掩盖问题的方式处理。
+---
+code_refs:
+  - tsconfig.json
+  - docs/lib/types.ts
+
+doc_refs:
+  - guides/development/development-standards
+---

@@ -7,12 +7,19 @@
  *   npx tsx docs/tools/seed.ts --clear-db    # 仅清空数据库
  *
  * 所有文档原始内容均内嵌于此脚本中，不依赖外部文件。
+ * 变更日志通过读取 git 提交记录自动生成。
  */
 
+import { execSync } from 'node:child_process';
 import { writeFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { getDb, closeDb } from '../lib/db/schema';
+import { insertDoc } from '../lib/db/docs';
+import { buildFootMatter } from './lib/foot-matter';
+import type { FootMatter } from './lib/foot-matter';
+import type { ReviewRecord } from '../lib/types';
+import { checkCodeRefs } from './check-code-refs';
 
 const ROOT = process.cwd();
 const DOCS_DIR = join(ROOT, 'docs');
@@ -20,339 +27,17 @@ const DRAFTS_DIR = join(DOCS_DIR, 'drafts');
 const DATA_DIR = join(DOCS_DIR, 'data');
 
 // ============================================================
-//  文档原始数据（正文 + 目标路径）
+//  文档原始数据（正文 + 目标路径 + 关联引用）
 // ============================================================
 interface SeedDoc {
-  file: string;   // 文件名（平级放在 drafts/ 下）
+  file: string;       // 文件名（平级放在 drafts/ 下）
   title: string;
-  target: string; // 发布后的目标路径
-  content: string;
+  target: string;     // 发布后的目标路径
+  content: string;    // Markdown 正文（不含 Front/Front Matter，脚本自动生成）
+  refs: FootMatter;   // Foot Matter 关联信息
 }
 
 const SEED_DOCS: SeedDoc[] = [
-  {
-    file: 'apis-index',
-    target: 'apis/index',
-    title: 'API 文档',
-    content: `# API 文档
-
-## 双轨制接口设计
-
-| 轨道 | 目标消费者 | 协议 | 类型安全 |
-|------|-----------|------|----------|
-| **Server Actions** | 网页内部组件 | \`"use server"\` 函数直接调用 | 端到端类型推断 |
-| **REST API** | 移动端、桌面端、第三方 | HTTP 标准方法 + 状态码 | Zod Schema 校验 |
-
-## Server Actions
-
-- 使用 \`"use server"\` 指令声明。
-- 前端调用时直接从引入函数推断入参和返回值类型。
-- 代码即接口文档，无需额外的 API 说明层。
-
-## REST API
-
-### 方法语义
-
-| 方法 | 用途 |
-|------|------|
-| \`GET\` | 获取数据 |
-| \`POST\` | 创建数据 |
-| \`PUT\` | 全量更新 |
-| \`PATCH\` | 局部更新 |
-| \`DELETE\` | 删除数据 |
-
-### 安全要求
-
-- 动态处理 CORS 头，必要时注入基准路径。
-- 所有接口实施权限校验作为第一道防线。
-
-### 文档规范
-
-新接口使用 \`docs/_templates/api-doc-template.md\` 模板编写文档。`,
-  },
-  {
-    file: 'architecture-adr-adr-0001-nextjs-app-router',
-    target: 'architecture/adr/adr-0001-nextjs-app-router',
-    title: 'ADR-0001: 采用 Next.js App Router 作为核心框架',
-    content: `# ADR-0001: 采用 Next.js App Router 作为核心框架
-
-## 状态
-
-已采纳
-
-## 背景
-
-项目需要在同一个仓库中支持网页端、移动端和桌面端。需要选择一个能够同时提供前端渲染和内部服务端逻辑的框架。
-
-## 决策
-
-采用 Next.js 16 App Router 作为核心框架。理由：
-
-1. App Router 提供 React Server Components（RSC），天然支持服务端数据获取与流式渲染
-2. Server Actions 使前后端通信获得端到端类型安全
-3. Route Handlers 可作为标准 REST 接口对外暴露
-4. 单仓库即可覆盖 Web + 内部服务端的全栈需求
-
-## 备选方案
-
-- **Next.js Pages Router**: API 路由更传统，但缺乏 RSC 的流式渲染能力和 Server Actions 的强类型支持
-- **Astro + Express**: 前后端分离增加通信成本和类型同步维护负担
-- **Nuxt 3**: 生态偏 Vue，与团队 React 技术栈不匹配
-
-## 影响
-
-### 正面
-- 单一部署单元（Web + API），降低运维复杂度
-- RSC 减少客户端 JavaScript 体积
-- Server Actions 消除传统 REST 样板代码
-
-### 负面
-- 需学习 Server Components 的"客户端/服务端"心智模型
-- 部分第三方 React 库可能不兼容 RSC`,
-  },
-  {
-    file: 'architecture-adr-adr-0002-typescript',
-    target: 'architecture/adr/adr-0002-typescript',
-    title: 'ADR-0002: 使用 TypeScript 作为主语言',
-    content: `# ADR-0002: 使用 TypeScript 作为主语言
-
-## 状态
-
-已采纳
-
-## 背景
-
-需要为全栈项目选择统一的编程语言。
-
-## 决策
-
-使用 TypeScript 作为全栈主语言。理由：
-
-1. 编译器级别的类型检查在编译时捕获大量错误
-2. 与 Next.js 深度集成，无需额外配置
-3. 数据库类型可通过 ORM（Prisma/Drizzle）自动生成，与代码端到端类型安全
-
-## 备选方案
-
-- **纯 JavaScript**: 缺乏类型安全，不利于大规模团队协作
-- **Python FastAPI + React**: 前后端语言不统一，类型无法共享
-
-## 影响
-
-- 需要团队掌握 TypeScript 基础
-- 某些第三方库缺少类型定义时需额外编写 \`.d.ts\``,
-  },
-  {
-    file: 'architecture-adr-index',
-    target: 'architecture/adr/index',
-    title: '架构决策记录（ADR）',
-    content: `# 架构决策记录（ADR）
-
-架构决策记录用于记录项目生命周期中做出的重要架构决策及其理由。
-
-## 当前决策
-
-| 编号 | 标题 | 状态 |
-|------|------|------|
-| 0001 | 采用 Next.js App Router 作为核心框架 | 已采纳 |
-| 0002 | 使用 TypeScript 作为主语言 | 已采纳 |
-| 0003 | 双轨制 API 设计（Server Action + REST） | 已采纳 |
-
-## 新建 ADR
-
-使用 \`docs/_templates/adr-template.md\` 模板创建新的 ADR 文件，文件名为 \`adr-NNNN-<简述>.md\`。`,
-  },
-  {
-    file: 'architecture-data-model-index',
-    target: 'architecture/data-model/index',
-    title: '数据模型',
-    content: `# 数据模型
-
-## 唯一真实来源
-
-数据库表结构、关联关系和索引定义拥有唯一的核心模型文件。所有服务端与客户端类型推断均从此文件自动生成，严禁手动维护重复的类型定义。
-
-## 模型设计准则
-
-- 广泛使用级联删除清理弱实体（评论、点赞、文件记录），杜绝孤儿数据。
-- 高频查询字段、外键关联字段、排序和过滤字段必须建立索引。
-- 数据库查询必须精确指定返回字段，严禁使用全字段查询。
-- 数据库环境切换通过环境变量动态挂载连接字符串实现。
-
-## 模型文件
-
-模型定义文件存放于 \`src/lib/models/\`，由 Prisma / Drizzle 等 ORM 统一管理。`,
-  },
-  {
-    file: 'getting-started-environment',
-    target: 'getting-started/environment',
-    title: '环境配置',
-    content: `# 环境配置
-
-## 环境变量文件
-
-通过 \`.env\` 文件管理各环境的配置：
-
-| 文件 | 用途 |
-|------|------|
-| \`.env\` | 默认/本地开发 |
-| \`.env.local\` | 本地覆盖（不提交） |
-| \`.env.development\` | 开发环境 |
-| \`.env.production\` | 生产环境 |
-
-## 核心环境变量
-
-\`\`\`bash
-# 数据库连接字符串
-DATABASE_URL=
-
-# 应用密钥
-APP_SECRET=
-
-# 第三方服务令牌
-REDIS_URL=
-\`\`\`
-
-## 安全准则
-
-所有机密信息（密钥、盐值、第三方令牌）必须由宿主机的环境变量注入，严禁随代码提交至版本控制系统。`,
-  },
-  {
-    file: 'getting-started-quickstart',
-    target: 'getting-started/quickstart',
-    title: '快速开始',
-    content: `# 快速开始
-
-## 前置条件
-
-- Node.js >= 20
-- npm >= 10
-
-## 安装与运行
-
-\`\`\`bash
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-# 访问 http://localhost:4728
-
-# 生产构建
-npm run build
-
-# 启动生产服务器
-npm run start
-\`\`\`
-
-## 项目结构概览
-
-\`\`\`
-uniCode
-├── CLAUDE.md              # AI Agent 调度入口
-├── AGENTS.md              # Next.js 官方 Agent 规则
-├── docs/                  # 项目知识库（人类 + AI 共享）
-│   ├── index.md           # 全局导航
-│   ├── _templates/        # 文档模板
-│   ├── architecture/      # 架构设计
-│   ├── guides/            # 开发/测试/运维指南
-│   └── ...
-├── src/
-│   └── app/               # Next.js App Router 页面
-├── public/                # 静态资源
-└── tools/                 # 辅助脚本工具
-\`\`\`
-
-## 下一步
-
-- 阅读 [编码规范](./guides-development-code-style.md)
-- 阅读 [Git 提交规范](./guides-development-commit-convention.md)
-- 阅读 [安全策略](./guides-development-security.md)`,
-  },
-  {
-    file: 'guides-development-code-style',
-    target: 'guides/development/code-style',
-    title: '编码规范',
-    content: `# 编码规范
-
-## 命名约定
-
-- **所有自定义目录与文件**: 严格使用 kebab-case（小写字母 + 连字符）。杜绝跨 OS 大小写敏感错误。
-- **Next.js 保留文件名**: 仅使用框架标准保留字 — \`page.tsx\`、\`layout.tsx\`、\`loading.tsx\`、\`error.tsx\`、\`route.ts\`。
-- **组件文件后缀**: \`*.view.tsx\`（展示组件）、\`*.layout.tsx\`（布局组件）、\`*.error.tsx\`（错误边界组件）。
-- **服务端文件**: \`*.action.ts\`（Server Action）、\`*.model.ts\`（数据模型）、\`*.service.ts\`（服务）。
-- **变量命名**: 布尔值以状态动词开头（\`isLoading\`、\`hasPermission\`、\`canEdit\`）。事件处理函数以 \`handle\` 前缀开头（\`handleClick\`、\`handleSubmit\`）。
-
-## 目录组织
-
-- **核心业务代码统一收敛于 \`src/\`**: 实现业务逻辑与配置文件的物理隔离。
-- **路由目录 = 业务领域边界**: 每个路由文件夹视为独立业务模块，严禁不同模块间底层强耦合。
-- **全局单例服务** 存放于 \`src/lib/\`（数据库连接、鉴权、审计日志等）。
-- **静态资源** 归拢于 \`public/\`，通过绝对路径引用。
-
-## TypeScript
-
-- 所有代码必须使用 TypeScript。
-- 严禁 \`any\` 类型，除非有明确注释说明原因。
-- 数据库类型从核心模型文件自动推断，严禁手动维护重复的类型定义。
-
-## 注释
-
-- 注释使用简体中文。
-- 注释内容与当前代码保持绝对一致，严禁过时、错误或误导性注释。
-- 代码修改后必须检查相关注释是否需要更新。
-
-## 零警告原则
-
-在任何环节（代码执行、终端输出、编译、打包、命令运行）均不允许出现任何错误或警告。一旦出现，必须定位根源并修正。严禁采用关闭日志、降低警告等级、绕过检查等掩盖问题的方式处理。`,
-  },
-  {
-    file: 'guides-development-commit-convention',
-    target: 'guides/development/commit-convention',
-    title: 'Git 提交规范',
-    content: `# Git 提交规范
-
-## 提交信息格式
-
-\`\`\`
-<type>(<scope>): <subject>
-
-<body>
-\`\`\`
-
-### Type 类型
-
-| 类型 | 说明 |
-|------|------|
-| \`feat\` | 新功能 |
-| \`fix\` | Bug 修复 |
-| \`docs\` | 文档变更 |
-| \`style\` | 代码格式（不影响功能） |
-| \`refactor\` | 重构 |
-| \`perf\` | 性能优化 |
-| \`test\` | 测试 |
-| \`chore\` | 构建/工具变更 |
-| \`ci\` | CI 配置变更 |
-
-### 示例
-
-\`\`\`
-feat(auth): 添加动态会话刷新机制
-
-perf(api): 消除用户信息查询的请求瀑布
-\`\`\`
-
-## 分支命名
-
-- 功能分支: \`feat/<功能简述>\`
-- 修复分支: \`fix/<问题简述>\`
-- 发布分支: \`release/<版本号>\`
-
-## 规则
-
-- 提交信息使用中文。
-- 严禁提交包含机密信息的文件（\`.env.local\`、证书、密钥）。`,
-  },
   {
     file: 'guides-development-development-standards',
     target: 'guides/development/development-standards',
@@ -527,6 +212,140 @@ perf(api): 消除用户信息查询的请求瀑布
 1. 为保证人工智能模型在代码生成与协作过程中能够严格遵循既定的项目机制，必须在项目根目录设立模型专属的系统指令约束文件。
 2. 必须将本开发规范中的核心原则（如禁用硬编码、强制异常捕获、严格的文件命名法、双轨制接口设计等）以指令形式硬性注入约束文件中。
 3. 确保模型在每次生成代码前，都会自动加载并应用这些上下文约束，使得自动生成的代码在架构美学、健壮性和安全性上完全贴合本项目的顶级要求，实现无缝的人机结对编程。`,
+    refs: {
+      code_refs: [
+        'src/proxy.ts',
+        'src/app/layout.tsx',
+        'docs/lib/actions.ts',
+        'docs/lib/db/schema.ts',
+        'docs/lib/db/docs.ts',
+        'docs/lib/types.ts',
+        'docs/lib/index.ts',
+        'docs/tools/scan-docs.ts',
+        'docs/tools/check-code-refs.ts',
+        'docs/tools/publish-docs.ts',
+        'docs/tools/seed.ts',
+        'package.json',
+        'next.config.ts',
+        'tsconfig.json',
+      ],
+      doc_refs: [
+        'getting-started/quickstart',
+        'guides/development/code-style',
+        'guides/development/security',
+        'project-management/changelog',
+      ],
+    },
+  },
+  {
+    file: 'getting-started-quickstart',
+    target: 'getting-started/quickstart',
+    title: '快速开始',
+    content: `# 快速开始
+
+## 前置条件
+
+- Node.js >= 20
+- npm >= 10
+
+## 安装与运行
+
+\`\`\`bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+# 访问 http://localhost:4728
+
+# 生产构建
+npm run build
+
+# 启动生产服务器
+npm run start
+\`\`\`
+
+## 项目结构
+
+\`\`\`
+uniCode
+├── CLAUDE.md              # AI Agent 调度入口
+├── AGENTS.md              # Next.js Agent 规则
+├── docs/                  # 项目知识库
+│   ├── drafts/            # AI 草稿区
+│   ├── production/        # 发布快照（只读）
+│   ├── tools/             # 辅助脚本
+│   └── lib/               # 业务逻辑
+└── src/                   # Next.js App Router
+    ├── app/               # 页面路由
+    └── proxy.ts           # JWT 认证中间件
+\`\`\`
+
+## 常用命令
+
+| 命令 | 作用 |
+|------|------|
+| \`npm run dev\` | 启动开发服务器 (port 4728) |
+| \`npm run build\` | 生产构建 |
+| \`npm run lint\` | ESLint 检查 |
+| \`npm run seed -- --reset\` | 重置文档系统 |
+| \`npm run scan-docs\` | 扫描文档合规性 |
+| \`npm run check-code-refs\` | 检测代码-文档关联变更 |
+
+## 下一步
+
+- 阅读 [开发规范](./guides-development-development-standards.md)（必读）
+- 阅读 [编码规范](./guides-development-code-style.md)
+- 阅读 [安全策略](./guides-development-security.md)`,
+    refs: {
+      code_refs: ['package.json', 'next.config.ts'],
+      doc_refs: [
+        'guides/development/development-standards',
+        'guides/development/code-style',
+        'guides/development/security',
+      ],
+    },
+  },
+  {
+    file: 'guides-development-code-style',
+    target: 'guides/development/code-style',
+    title: '编码规范',
+    content: `# 编码规范
+
+## 命名约定
+
+- **所有自定义目录与文件**: 严格使用 kebab-case（小写字母 + 连字符）。杜绝跨 OS 大小写敏感错误。
+- **Next.js 保留文件名**: 仅使用框架标准保留字 — \`page.tsx\`、\`layout.tsx\`、\`loading.tsx\`、\`error.tsx\`、\`route.ts\`。
+- **组件文件后缀**: \`*.view.tsx\`（展示组件）、\`*.layout.tsx\`（布局组件）、\`*.error.tsx\`（错误边界组件）。
+- **服务端文件**: \`*.action.ts\`（Server Action）、\`*.model.ts\`（数据模型）、\`*.service.ts\`（服务）。
+- **变量命名**: 布尔值以状态动词开头（\`isLoading\`、\`hasPermission\`、\`canEdit\`）。事件处理函数以 \`handle\` 前缀开头（\`handleClick\`、\`handleSubmit\`）。
+
+## 目录组织
+
+- **核心业务代码统一收敛于 \`src/\`**: 实现业务逻辑与配置文件的物理隔离。
+- **路由目录 = 业务领域边界**: 每个路由文件夹视为独立业务模块，严禁不同模块间底层强耦合。
+- **全局单例服务** 存放于 \`src/lib/\`（数据库连接、鉴权、审计日志等）。
+- **静态资源** 归拢于 \`public/\`，通过绝对路径引用。
+
+## TypeScript
+
+- 所有代码必须使用 TypeScript。
+- 严禁 \`any\` 类型，除非有明确注释说明原因。
+- 数据库类型从核心模型文件自动推断，严禁手动维护重复的类型定义。
+
+## 注释
+
+- 注释使用简体中文。
+- 注释内容与当前代码保持绝对一致，严禁过时、错误或误导性注释。
+- 代码修改后必须检查相关注释是否需要更新。
+
+## 零警告原则
+
+在任何环节（代码执行、终端输出、编译、打包、命令运行）均不允许出现任何错误或警告。一旦出现，必须定位根源并修正。严禁采用关闭日志、降低警告等级、绕过检查等掩盖问题的方式处理。`,
+    refs: {
+      code_refs: ['tsconfig.json', 'docs/lib/types.ts'],
+      doc_refs: ['guides/development/development-standards'],
+    },
   },
   {
     file: 'guides-development-security',
@@ -565,80 +384,82 @@ perf(api): 消除用户信息查询的请求瀑布
 
 - 严禁在日志中打印敏感信息（密码、会话凭证、完整支付信息等）。
 - 所有流入日志系统的数据必须经过脱敏清洗。`,
-  },
-  {
-    file: 'guides-operations-deployment',
-    target: 'guides/operations/deployment',
-    title: '运维指南',
-    content: `# 运维指南
-
-## 构建与部署
-
-\`\`\`bash
-# 生产构建
-npm run build
-
-# 启动生产服务器
-npm run start
-\`\`\`
-
-## 维护模式
-
-通过中间件读取全局配置实现一键维护状态切换。维护模式下所有非白名单请求被拦截并重定向至维护说明页面，实现零代码修改的热切换。
-
-## 环境管理
-
-- 所有部署环境通过独立的环境变量文件隔离管理。
-- 核心机密信息由宿主机环境变量注入，严禁随代码提交。
-- 详见 [环境配置](./getting-started-environment.md)`,
-  },
-  {
-    file: 'guides-testing-overview',
-    target: 'guides/testing/overview',
-    title: '测试指南',
-    content: `# 测试指南
-
-## 测试策略
-
-- **单元测试**: 工具函数、纯逻辑
-- **集成测试**: 数据库操作、API 端点
-- **E2E 测试**: 关键用户流程
-
-## 运行测试
-
-\`\`\`bash
-# 运行全部测试
-npm test
-
-# 运行单个测试文件
-npm test -- <文件路径>
-
-# 生成覆盖率报告
-npm test -- --coverage
-\`\`\`
-
-## 测试规范
-
-- 新功能必须包含对应的测试用例。
-- 集成测试必须触及真实数据库，不使用模拟层（防止模拟/生产差异掩盖问题）。`,
-  },
-  {
-    file: 'project-management-changelog',
-    target: 'project-management/changelog',
-    title: '变更日志',
-    content: `# 变更日志
-
-## [Unreleased]
-
-### Added
-- 初始化 Next.js 16 项目模板
-- 建立统一文档治理体系
-- 制定企业级开发规范`,
+    refs: {
+      code_refs: ['src/proxy.ts', 'docs/lib/actions.ts'],
+      doc_refs: ['guides/development/development-standards'],
+    },
   },
 ];
 
 // ============================================================
-//  种子生成逻辑
+//  变更日志自动生成
+// ============================================================
+interface ChangelogEntry {
+  date: string;
+  hash: string;
+  message: string;
+}
+
+function generateChangelog(): { content: string; refs: FootMatter } {
+  let commits: ChangelogEntry[] = [];
+
+  try {
+    const output = execSync('git log --format="%H|%ai|%s" -50', {
+      cwd: ROOT,
+      encoding: 'utf-8',
+    }).trim();
+
+    commits = output
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [hash, dateStr, ...msgParts] = line.split('|');
+        return {
+          hash: hash.slice(0, 7),
+          date: dateStr.split(' ')[0], // 只取日期部分
+          message: msgParts.join('|').trim(),
+        };
+      });
+  } catch {
+    // 非 git 仓库或无提交记录时使用占位内容
+  }
+
+  const lines = ['# 变更日志'];
+
+  if (commits.length === 0) {
+    lines.push('');
+    lines.push('暂无提交记录。');
+  } else {
+    // 按日期分组
+    const groups = new Map<string, ChangelogEntry[]>();
+    for (const c of commits) {
+      const list = groups.get(c.date) || [];
+      list.push(c);
+      groups.set(c.date, list);
+    }
+
+    for (const [date, entries] of groups) {
+      lines.push('');
+      lines.push(`## ${date}`);
+      for (const entry of entries) {
+        lines.push(`- ${entry.message} (\`${entry.hash}\`)`);
+      }
+    }
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  lines.push('> 本文档由 `npm run seed` 自动生成，内容来源于 `git log`。');
+
+  return {
+    content: lines.join('\n'),
+    refs: { code_refs: [], doc_refs: [] },
+  };
+}
+
+// ============================================================
+//  Front Matter 生成
 // ============================================================
 const YAML_ORDER = ['author', 'reviewer', 'status', 'last_reviewed', 'review_date', 'review_comment', 'review_history', 'target_path'];
 
@@ -659,6 +480,9 @@ function buildFrontmatter(data: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
+// ============================================================
+//  清理函数
+// ============================================================
 async function clearDb(): Promise<void> {
   const db = getDb();
   const count = db.prepare('SELECT COUNT(*) as cnt FROM docs').get() as { cnt: number };
@@ -688,16 +512,15 @@ async function resetRuntimeData(): Promise<void> {
   for (const f of files) {
     const p = join(DATA_DIR, f);
     if (existsSync(p)) {
-      if (f.endsWith('.json')) {
-        await writeFile(p, '{}', 'utf-8');
-      } else {
-        await rm(p);
-      }
+      await writeFile(p, '{}', 'utf-8');
       console.log(`  ${f}: 已重置`);
     }
   }
 }
 
+// ============================================================
+//  种子生成逻辑
+// ============================================================
 async function seedDocs(docs: SeedDoc[]): Promise<void> {
   let count = 0;
   for (const doc of docs) {
@@ -714,7 +537,10 @@ async function seedDocs(docs: SeedDoc[]): Promise<void> {
       target_path: doc.target,
     });
 
-    await writeFile(targetPath, frontmatter + doc.content, 'utf-8');
+    const footMatter = buildFootMatter(doc.refs);
+    const fullContent = frontmatter + doc.content + footMatter;
+
+    await writeFile(targetPath, fullContent, 'utf-8');
     console.log(`  [种子] drafts/${doc.file}.md  →  ${doc.target}`);
     count++;
   }
@@ -722,10 +548,32 @@ async function seedDocs(docs: SeedDoc[]): Promise<void> {
   console.log(`\n共生成 ${count} 份种子文档到 docs/drafts/`);
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const shouldReset = args.includes('--reset');
-  const clearDbOnly = args.includes('--clear-db');
+async function seedChangelog(): Promise<void> {
+  const { content } = generateChangelog();
+  const today = new Date().toISOString().split('T')[0];
+  const record: ReviewRecord = { date: today, reviewer: 'system', action: 'published', comment: '从 git log 自动生成' };
+
+  insertDoc({
+    slug: 'project-management/changelog',
+    title: '变更日志',
+    content,
+    author: 'ai-generated',
+    reviewer: 'system',
+    status: 'published',
+    last_reviewed: today,
+    review_date: today,
+    review_comment: '',
+    review_history: [record],
+    target_path: '',
+  });
+
+  console.log('  [种子] project-management/changelog 直接入库发布（跳过审核）');
+}
+
+export async function runSeed(args?: string[]): Promise<void> {
+  const argv = args ?? process.argv.slice(2);
+  const shouldReset = argv.includes('--reset');
+  const clearDbOnly = argv.includes('--clear-db');
 
   if (clearDbOnly) {
     console.log('仅清空数据库...\n');
@@ -736,27 +584,34 @@ async function main() {
 
   if (shouldReset) {
     console.log('==== 重置文档系统 ====\n');
-    console.log('[1/4] 清空数据库...');
+    console.log('[1/5] 清空数据库...');
     await clearDb();
-    console.log('[2/4] 清空 production 快照...');
+    console.log('[2/5] 清空 production 快照...');
     await clearProduction();
-    console.log('[3/4] 清空运行时数据...');
+    console.log('[3/5] 清空运行时数据...');
     await resetRuntimeData();
-    console.log('[4/4] 清空 drafts 并重新生成...');
+    console.log('[4/5] 清空 drafts 并重新生成...');
     await clearDrafts();
   } else {
     console.log('生成种子文档...\n');
   }
 
-  console.log(`内嵌 ${SEED_DOCS.length} 篇文档\n`);
+  console.log(`内嵌 ${SEED_DOCS.length} 篇文档 + 变更日志（Git 自动生成）\n`);
   await seedDocs(SEED_DOCS);
+  await seedChangelog();
 
+  // 重置时自动初始化 code-hashes 快照
   if (shouldReset) {
+    console.log('[5/5] 初始化代码-文档哈希快照...');
+    await checkCodeRefs({ init: true, silent: true });
     console.log('\n==== 重置完成 ====');
   }
 }
 
-main().catch((err) => {
-  console.error('种子脚本失败:', err);
-  process.exit(1);
-});
+// 仅在直接运行时执行 CLI（被 tool.ts 引入时跳过）
+if (process.argv[1]?.replace(/\\/g, '/').includes('docs/tools/seed')) {
+  runSeed().catch((err) => {
+    console.error('种子脚本失败:', err);
+    process.exit(1);
+  });
+}
