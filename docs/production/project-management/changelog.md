@@ -9,6 +9,9 @@ review_history: [{"date":"2026-05-11","reviewer":"system","action":"published","
 ---
 # 变更日志
 
+## 2026-05-11
+- refactor(docs): 重构文档工具链并精简文档结构 (`7c5d2fa`)
+
 ## 2026-05-10
 - first commit (`6ee8c5f`)
 
